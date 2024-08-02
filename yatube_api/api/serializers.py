@@ -1,23 +1,43 @@
+from django.contrib.auth import get_user_model
+from posts.models import Comment, Follow, Group, Post
 from rest_framework import serializers
-from rest_framework.relations import SlugRelatedField
 
-
-from posts.models import Comment, Post
+User = get_user_model()
 
 
 class PostSerializer(serializers.ModelSerializer):
-    author = SlugRelatedField(slug_field='username', read_only=True)
+    author = serializers.ReadOnlyField(source='author.username')
 
     class Meta:
-        fields = '__all__'
         model = Post
+        fields = '__all__'
 
 
 class CommentSerializer(serializers.ModelSerializer):
-    author = serializers.SlugRelatedField(
-        read_only=True, slug_field='username'
-    )
+    author = serializers.ReadOnlyField(source='author.username')
+    post = serializers.ReadOnlyField(source='post.id')
 
     class Meta:
-        fields = '__all__'
         model = Comment
+        fields = '__all__'
+
+
+class FollowSerializer(serializers.ModelSerializer):
+    user = serializers.SlugRelatedField(slug_field='username', read_only=True)
+    following = serializers.SlugRelatedField(
+        slug_field='username', queryset=User.objects.all())
+
+    class Meta:
+        model = Follow
+        fields = '__all__'
+
+    def validate_following(self, value):
+        if self.context['request'].user == value:
+            raise serializers.ValidationError("You cannot follow yourself.")
+        return value
+
+
+class GroupSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Group
+        fields = '__all__'
