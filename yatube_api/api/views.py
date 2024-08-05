@@ -1,8 +1,10 @@
-from posts.models import Comment, Follow, Group, Post
-from rest_framework import (filters, generics, permissions, serializers,
-                            status, viewsets)
+from django.shortcuts import get_object_or_404
+
+from rest_framework import filters, generics, permissions, status, viewsets
 from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.response import Response
+
+from posts.models import Comment, Follow, Group, Post
 
 from .permissions import IsAuthorOrReadOnly
 from .serializers import (CommentSerializer, FollowSerializer, GroupSerializer,
@@ -19,11 +21,6 @@ class PostViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(author=self.request.user)
 
-    def update(self, request, *args, **kwargs):
-        post = self.get_object()
-        self.check_object_permissions(request, post)
-        return super().update(request, *args, **kwargs)
-
     def partial_update(self, request, *args, **kwargs):
         post = self.get_object()
         self.check_object_permissions(request, post)
@@ -34,34 +31,8 @@ class PostViewSet(viewsets.ModelViewSet):
         self.check_object_permissions(request, post)
         return super().destroy(request, *args, **kwargs)
 
-
-class PostDetailView(generics.RetrieveAPIView):
-    queryset = Post.objects.all()
-    serializer_class = PostSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
-
     def get(self, request, *args, **kwargs):
         return super().get(request, *args, **kwargs)
-
-
-class PostListView(generics.ListCreateAPIView):
-    queryset = Post.objects.all()
-    serializer_class = PostSerializer
-    pagination_class = LimitOffsetPagination
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
-
-
-class CommentListView(generics.ListCreateAPIView):
-    serializer_class = CommentSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
-
-    def get_queryset(self):
-        post_id = self.kwargs['post_id']
-        return Comment.objects.filter(post_id=post_id)
-
-    def perform_create(self, serializer):
-        post_id = self.kwargs['post_id']
-        serializer.save(post_id=post_id, author=self.request.user)
 
 
 class CommentDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -69,8 +40,12 @@ class CommentDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
     def get_queryset(self):
+        post = get_object_or_404(Post, id=self.kwargs['post_id'])
+        return post.comments.all()
+
+    def perform_create(self, serializer):
         post_id = self.kwargs['post_id']
-        return Comment.objects.filter(post_id=post_id)
+        serializer.save(post_id=post_id, author=self.request.user)
 
     def delete(self, request, *args, **kwargs):
         comment = self.get_object()
@@ -82,12 +57,23 @@ class CommentDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
 class CommentViewSet(viewsets.ModelViewSet):
-    queryset = Comment.objects.all()
     serializer_class = CommentSerializer
     permission_classes = [IsAuthorOrReadOnly]
 
+    def get_queryset(self):
+        post_id = self.kwargs.get('post_id')
+        return Comment.objects.filter(post_id=post_id)
+
+    def create(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return Response({
+                "detail": "Authentication credentials were not provided."},
+                status=status.HTTP_401_UNAUTHORIZED)
+        return super().create(request, *args, **kwargs)
+
     def perform_create(self, serializer):
-        serializer.save(author=self.request.user)
+        post = get_object_or_404(Post, pk=self.kwargs.get('post_id'))
+        serializer.save(author=self.request.user, post=post)
 
 
 class FollowViewSet(viewsets.ModelViewSet):
@@ -100,13 +86,6 @@ class FollowViewSet(viewsets.ModelViewSet):
         return Follow.objects.filter(user=self.request.user)
 
     def perform_create(self, serializer):
-        author_username = serializer.validated_data.get('following').username
-        if author_username == self.request.user.username:
-            raise serializers.ValidationError("You cannot follow yourself.")
-        if Follow.objects.filter(user=self.request.user,
-                                 following__username=author_username).exists():
-            raise serializers.ValidationError(
-                "You are already following this user.")
         serializer.save(user=self.request.user)
 
 

@@ -1,12 +1,17 @@
 from django.contrib.auth import get_user_model
-from posts.models import Comment, Follow, Group, Post
+
 from rest_framework import serializers
+
+from posts.models import Comment, Follow, Group, Post
 
 User = get_user_model()
 
 
 class PostSerializer(serializers.ModelSerializer):
-    author = serializers.ReadOnlyField(source='author.username')
+    author = serializers.SlugRelatedField(
+        slug_field='username',
+        read_only=True
+    )
 
     class Meta:
         model = Post
@@ -14,12 +19,21 @@ class PostSerializer(serializers.ModelSerializer):
 
 
 class CommentSerializer(serializers.ModelSerializer):
-    author = serializers.ReadOnlyField(source='author.username')
+    author = serializers.SlugRelatedField(
+        slug_field='username',
+        read_only=True
+    )
     post = serializers.ReadOnlyField(source='post.id')
 
     class Meta:
         model = Comment
         fields = '__all__'
+
+    def validate(self, data):
+        if self.context['request'].user.is_anonymous:
+            raise serializers.ValidationError(
+                "You must be authenticated to create a comment.")
+        return data
 
 
 class FollowSerializer(serializers.ModelSerializer):
@@ -32,8 +46,12 @@ class FollowSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def validate_following(self, value):
-        if self.context['request'].user == value:
+        user = self.context['request'].user
+        if user == value:
             raise serializers.ValidationError("You cannot follow yourself.")
+        if Follow.objects.filter(user=user, following=value).exists():
+            raise serializers.ValidationError(
+                "You are already following this user.")
         return value
 
 
