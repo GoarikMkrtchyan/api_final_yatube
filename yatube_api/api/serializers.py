@@ -23,17 +23,13 @@ class CommentSerializer(serializers.ModelSerializer):
         slug_field='username',
         read_only=True
     )
-    post = serializers.ReadOnlyField(source='post.id')
+    post = serializers.PrimaryKeyRelatedField(
+        read_only=True
+    )
 
     class Meta:
         model = Comment
         fields = '__all__'
-
-    def validate(self, data):
-        if self.context['request'].user.is_anonymous:
-            raise serializers.ValidationError(
-                "You must be authenticated to create a comment.")
-        return data
 
 
 class FollowSerializer(serializers.ModelSerializer):
@@ -48,10 +44,10 @@ class FollowSerializer(serializers.ModelSerializer):
     def validate_following(self, value):
         user = self.context['request'].user
         if user == value:
-            raise serializers.ValidationError("You cannot follow yourself.")
+            raise serializers.ValidationError('You cannot follow yourself.')
         if Follow.objects.filter(user=user, following=value).exists():
             raise serializers.ValidationError(
-                "You are already following this user.")
+                'You are already following this user.')
         return value
 
 

@@ -34,10 +34,5 @@
     ```sh
     python manage.py runserver
     ```
-## Примеры запросов к API
 
-### Получение списка постов
-
-```http
-GET /api/v1/posts/
 Проект разработан [Goarik](https://github.com/GoarikMkrtchyan).
